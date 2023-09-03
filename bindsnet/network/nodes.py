@@ -415,6 +415,125 @@ class IFNodes(Nodes):
         self.refrac_count = torch.zeros_like(self.v, device=self.refrac_count.device)
 
 
+class NVNodes(Nodes):
+    # language=rst
+    """
+    Layer of `integrate-and-fire (IF) neurons <https://www.sciencedirect.com/science/article/abs/pii/S0921889003001520>`_.
+    """
+    def __init__(
+        self,
+        n: Optional[int] = None,
+        shape: Optional[Iterable[int]] = None,
+        traces: bool = False,
+        traces_additive: bool = False,
+        tc_trace: Union[float, torch.Tensor] = 20.0,
+        trace_scale: Union[float, torch.Tensor] = 1.0,
+        rest: Union[float, torch.Tensor] = 1.0,
+        reset: Union[float, torch.Tensor] = 1.0,
+        tc_decay: Union[float, torch.Tensor] = 1.0,
+        v_thl: float = 0.25,
+        v_thh: float = 0.49,
+        sum_input: bool = False,
+        **kwargs,
+    ) -> None:
+        # language=rst
+        """
+        Instantiates a layer of LIF neurons.
+
+        :param n: The number of neurons in the layer.
+        :param shape: The dimensionality of the layer.
+        :param traces: Whether to record spike traces.
+        :param traces_additive: Whether to record spike traces additively.
+        :param tc_trace: Time constant of spike trace decay.
+        :param trace_scale: Scaling factor for spike trace.
+        :param sum_input: Whether to sum all inputs.
+        :param thresh: Spike threshold voltage.
+        :param rest: Resting membrane voltage.
+        :param reset: Post-spike reset voltage.
+        :param refrac: Refractory (non-firing) period of the neuron.
+        :param tc_decay: Time constant of neuron voltage decay.
+        :param lbound: Lower bound of the voltage.
+        """
+        self.v_thl = v_thl
+        self.v_thh = v_thh
+        super().__init__(
+            n=n,
+            shape=shape,
+            traces=traces,
+            traces_additive=traces_additive,
+            tc_trace=tc_trace,
+            trace_scale=trace_scale,
+            sum_input=sum_input,
+        )
+
+        self.register_buffer(
+            "rest", torch.tensor(rest, dtype=torch.float)
+        )  # Rest voltage.
+        self.register_buffer(
+            "reset", torch.tensor(reset, dtype=torch.float)
+        )  # Post-spike reset voltage.
+        self.register_buffer(
+            "tc_decay", torch.tensor(tc_decay, dtype=torch.float)
+        )  # Time constant of neuron voltage decay.
+        self.register_buffer(
+            "decay", torch.zeros(*self.shape)
+        )  # Set in compute_decays.
+        self.register_buffer("v", torch.ones(n))  # Neuron voltages.
+        self.register_buffer("y", torch.ones(n))  # Neuron outputs.
+
+    def forward(self, x: torch.Tensor) -> None:
+        # Compute the inputs to each node
+        v_in = torch.floor(x.view(-1) / self.in_degree)
+
+        # Update neuron outputs
+        v_schmitt = v_in - self.v
+
+        # dormant when v_schmitt < v_thl OR s = 1 and v_schitt < v_thh
+        is_dormant = torch.logical_or(
+            v_schmitt <= self.v_thl,
+            torch.logical_and(v_schmitt < self.v_thh, self.y == 1)
+        )
+        self.y[is_dormant] = 1
+        self.y[torch.logical_not(is_dormant)] = 0
+
+        # Update the capacitor voltages
+        self.v = v_in + ((self.v - v_in) * torch.exp(-self.dt / self.tc_decay))
+        print(self.v)
+        # Call super constructor --- does not affect self.v and self.s
+        self.s = self.y.reshape(1, -1)
+        super().forward(x)
+    
+    def reset_state_variables(self) -> None:
+        # language=rst
+        """
+        Resets relevant state variables.
+        """
+        super().reset_state_variables()
+
+    def compute_decays(self, dt) -> None:
+        # language=rst
+        """
+        Sets the relevant decays.
+        """
+        super().compute_decays(dt=dt)
+    
+    def set_batch_size(self, batch_size) -> None:
+        # language=rst
+        """
+        Sets mini-batch size. Called when layer is added to a network.
+
+        :param batch_size: Mini-batch size.
+        """
+        super().set_batch_size(batch_size=batch_size)
+
+    
+
+ 
+    
+
+
+
+
 class LIFNodes(Nodes):
     # language=rst
     """
