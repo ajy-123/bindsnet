@@ -498,7 +498,6 @@ class NVNodes(Nodes):
 
         # Update the capacitor voltages
         self.v = v_in + ((self.v - v_in) * torch.exp(-self.dt / self.tc_decay))
-        print(self.v)
         # Call super constructor --- does not affect self.v and self.s
         self.s = self.y.reshape(1, -1)
         super().forward(x)

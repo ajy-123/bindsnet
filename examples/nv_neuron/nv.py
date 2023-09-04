@@ -10,6 +10,7 @@ from torchvision import transforms
 from tqdm import tqdm
 from bindsnet.analysis.plotting import plot_spikes, plot_voltages, plot_weights
 from matplotlib import animation
+import networkx as nx
 
 
 
@@ -28,22 +29,69 @@ from bindsnet.network.topology import Connection
 
 # Manually defined parameters
 dt = 0.5
-n_neurons = 6
 device = "cpu"
 time = 100
 
+
+
+# Parameters
+num_rings = 2
+nodes_per_ring = 5
+total_nodes = num_rings * nodes_per_ring
+
 # Create simple Torch NN
 network = Network(dt=dt)
-ring = NVNodes(n_neurons)
+ring = NVNodes(total_nodes)
 network.add_layer(ring, name="Ring")
 
+def generate_adjacency_matrix(num_rings, nodes_per_ring):
+    total_nodes = num_rings * nodes_per_ring
+
+    # Initialize an empty adjacency matrix
+    adjacency_matrix = np.zeros((total_nodes, total_nodes), dtype=int)
+
+    # Fill in adjacency matrix for each ring
+    for ring in range(num_rings):
+        for node in range(nodes_per_ring):
+            from_node = ring * nodes_per_ring + node
+            to_node = ring * nodes_per_ring + (node + 1) % nodes_per_ring  # Connect to the next node in the same ring
+            adjacency_matrix[from_node, to_node] = 1
+
+            # Connect to corresponding nodes in other rings
+            for other_ring in range(num_rings):
+                if other_ring != ring:  # Skip the current ring (already connected)
+                    to_node = other_ring * nodes_per_ring + node
+                    adjacency_matrix[from_node, to_node] = 1
+
+    return adjacency_matrix
+
+# Example usage:
+num_rings = 2
+nodes_per_ring = 5
+adjacency_matrix = generate_adjacency_matrix(num_rings, nodes_per_ring)
+print(adjacency_matrix)
+
+adjacency_matrix_tensor = torch.tensor(adjacency_matrix, dtype=torch.float32)
+
+def visualize_adjacency_matrix(adjacency_matrix):
+    # Create a graph from the adjacency matrix
+    G = nx.Graph(np.array(adjacency_matrix))
+    
+    # Draw the graph
+    pos = nx.spring_layout(G, seed=42)  # You can choose different layout algorithms
+    nx.draw(G, pos, with_labels=True, node_size=200, node_color='skyblue', font_size=8)
+    
+    # Display the graph
+    plt.title("Square Lattice with Extended Nodes")
+    plt.show()
+    plt.savefig("examples/nv_neuron/adjacency_graph.png")
+
+visualize_adjacency_matrix(adjacency_matrix)
+
 # Define adjacency matrix that describes a ring
-W_ring = torch.zeros(n_neurons, n_neurons)
-W_ring[torch.arange(n_neurons),torch.arange(-1,n_neurons-1)%n_neurons] = 1
-print(W_ring)
-C1 = Connection(source=ring, target=ring, w=W_ring)
+C1 = Connection(source=ring, target=ring, w=adjacency_matrix_tensor)
 network.add_connection(C1, source="Ring", target="Ring")
-ring.in_degree = torch.ones(n_neurons)
+ring.in_degree = torch.mul(torch.ones(total_nodes), 2)
 
 # Monitors for visualizing activity
 v_out = Monitor(ring, ["s"], time=time, device=device)
