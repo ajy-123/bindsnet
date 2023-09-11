@@ -38,6 +38,7 @@ time = 100
 num_rings = 2
 nodes_per_ring = 5
 total_nodes = num_rings * nodes_per_ring
+COUPLING_CONSTANT = 1
 
 # Create simple Torch NN
 network = Network(dt=dt)
@@ -61,7 +62,7 @@ def generate_adjacency_matrix(num_rings, nodes_per_ring):
             for other_ring in range(num_rings):
                 if other_ring != ring:  # Skip the current ring (already connected)
                     to_node = other_ring * nodes_per_ring + node
-                    adjacency_matrix[from_node, to_node] = 1
+                    adjacency_matrix[from_node, to_node] = COUPLING_CONSTANT
 
     return adjacency_matrix
 
@@ -84,7 +85,7 @@ def visualize_adjacency_matrix(adjacency_matrix):
     # Display the graph
     plt.title("Square Lattice with Extended Nodes")
     plt.show()
-    plt.savefig("examples/nv_neuron/adjacency_graph.png")
+    plt.savefig("examples/nv_neuron/coupling_constant_0.1/adjacency_graph.png")
 
 visualize_adjacency_matrix(adjacency_matrix)
 
