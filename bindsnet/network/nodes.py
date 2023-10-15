@@ -434,6 +434,8 @@ class NVNodes(Nodes):
         v_thl: float = 0.25,
         v_thh: float = 0.49,
         sum_input: bool = False,
+        coupling_constant: float = None,
+        num_rings: int = None,
         **kwargs,
     ) -> None:
         # language=rst
@@ -456,6 +458,9 @@ class NVNodes(Nodes):
         """
         self.v_thl = v_thl
         self.v_thh = v_thh
+        self.coupling_constant = coupling_constant
+        self.num_rings = num_rings
+
         super().__init__(
             n=n,
             shape=shape,
@@ -483,12 +488,13 @@ class NVNodes(Nodes):
 
     def forward(self, x: torch.Tensor) -> None:
         # Compute the inputs to each node
-        v_in = torch.floor(x.view(-1) / self.in_degree)
+        #v_in = torch.div(x.view(-1), 1 + self.coupling_constant)
+        v_in = x.view(-1)
 
         # Update neuron outputs
         v_schmitt = v_in - self.v
 
-        # dormant when v_schmitt < v_thl OR s = 1 and v_schitt < v_thh
+        # dormant when v_schmitt < v_thl OR s = 1 and v_schmitt < v_thh
         is_dormant = torch.logical_or(
             v_schmitt <= self.v_thl,
             torch.logical_and(v_schmitt < self.v_thh, self.y == 1)
